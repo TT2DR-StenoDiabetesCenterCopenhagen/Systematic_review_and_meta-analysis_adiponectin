@@ -1,0 +1,739 @@
+---
+title: "Systematic review adiponectin"
+output: html_document
+date: "2023-08-29"
+fig.align: "right"
+---
+
+
+```{r}
+#Relevant packages to be used:
+#install.packages("rtools")
+#library("rtools")
+library("tidyverse")
+library("meta")
+library("metafor")
+library("devtools")
+library("readxl")
+library("openxlsx")
+devtools::install_github("MathiasHarrer/dmetar")
+library("dmetar")
+library("robvis")
+library("esc")
+library(ggplot2)
+library("forestplot")
+library("readxl")
+'force = TRUE'
+```
+
+
+```{r}
+#META-ANALYSIS ON LBW VS NBW
+#dataset for (adiponectin)
+# Use forward slash
+setwd("C:\\Users\\AALH0054\\Desktop\\R codes")
+
+
+adiponectin_06122023 <- Categorical_table_adiponectin <- read_excel("C:\\Users\\AALH0054\\Desktop\\R codes/Categorical table Adiponectin.xlsx")
+adiponectinSRdata <- adiponectin_06122023
+
+
+adiponectinSRdata$mean_birth_weight_control <- as.numeric(adiponectinSRdata$mean_birth_weight_control)
+adiponectinSRdata$mean_birth_weight_intervention <- as.numeric(adiponectinSRdata$mean_birth_weight_intervention)
+
+
+
+#Changing variable names and calculating new variables:
+adiponectinSRdata$birth_weight_mean_diff <- ((adiponectinSRdata$mean_birth_weight_control) - (adiponectinSRdata$mean_birth_weight_intervention))
+
+adiponectinSRdata <- adiponectinSRdata %>%
+  mutate(publication_year1 = publication_year)
+adiponectinSRdata <- unite(adiponectinSRdata, study, study, publication_year1, sep = " - ")
+```
+
+
+
+```{r}
+#Converting variables to the correct format (adiponectin)
+adiponectinSRdata$study <- as.character(adiponectinSRdata$study)
+adiponectinSRdata$mean_birth_weight_intervention <- as.numeric(adiponectinSRdata$mean_birth_weight_intervention)
+adiponectinSRdata$sd_birth_weight_intervention <- as.numeric(adiponectinSRdata$sd_birth_weight_intervention)
+adiponectinSRdata$n_intervention <- as.numeric(adiponectinSRdata$n_intervention)
+adiponectinSRdata$mean_adiponectin_intervention <- as.numeric(adiponectinSRdata$mean_adiponectin_intervention)
+adiponectinSRdata$sd_adiponectin_intervention <- as.numeric(adiponectinSRdata$sd_adiponectin_intervention)
+adiponectinSRdata$mean_birth_weight_control<- as.numeric(adiponectinSRdata$mean_birth_weight_control)
+adiponectinSRdata$mean_adiponectin_control <- as.numeric(adiponectinSRdata$mean_adiponectin_control)
+adiponectinSRdata$sd_adiponectin_control <- as.numeric(adiponectinSRdata$sd_adiponectin_control)
+adiponectinSRdata$n_control <- as.numeric(adiponectinSRdata$n_control)
+adiponectinSRdata$risk_of_bias <- as.character(adiponectinSRdata$risk_of_bias)
+adiponectinSRdata$age_category <- as.character(adiponectinSRdata$age_category)
+adiponectinSRdata$blood_sample_type <- as.character(adiponectinSRdata$blood_sample_type)
+adiponectinSRdata$molecular_form <- as.character(adiponectinSRdata$molecular_form)
+
+```
+
+
+```{r}
+#Subgroups for meta-analysis
+#adiponectin
+adiponectinMETA <- adiponectinSRdata %>% select(
+    study,
+    publication_year,
+    mean_adiponectin_intervention,
+    sd_adiponectin_intervention,
+    n_intervention,
+    mean_adiponectin_control,
+    sd_adiponectin_control,
+    n_control,
+    birth_weight_mean_diff,
+    blood_sample_type,
+    age_category,
+    risk_of_bias,
+    molecular_form,
+    
+    )
+
+adiponectinMETA <- adiponectinMETA  %>% drop_na()
+```
+
+
+
+```{r}
+#Calculating TE and seTE
+#adiponectin
+adiponectinMETA_calc <- pmap_dfr(adiponectinMETA, 
+                    function(mean_adiponectin_intervention, sd_adiponectin_intervention, n_intervention, mean_adiponectin_control, sd_adiponectin_control, study, n_control, publication_year, birth_weight_mean_diff, blood_sample_type, age_category, risk_of_bias, molecular_form){
+                      esc_mean_sd(grp1m = mean_adiponectin_intervention,
+                                  grp1sd = sd_adiponectin_intervention,
+                                  grp1n = n_intervention,
+                                  grp2m = mean_adiponectin_control,
+                                  grp2sd = sd_adiponectin_control,
+                                  grp2n = n_control,
+                                  study= study,
+                                  es.type = "g") %>% 
+                        as.data.frame()})
+
+```
+
+```{r}
+#Raw effect size data in the form of means and standard deviations of two groups can be pooled using metacont.
+# Use metcont to pool results.
+
+#adiponectin
+m.contadiponectin <- metacont(n.e = n_intervention,
+                   mean.e = mean_adiponectin_intervention,
+                   sd.e = sd_adiponectin_intervention,
+                   n.c = n_control,
+                   mean.c = mean_adiponectin_control,
+                   sd.c = sd_adiponectin_control,
+                   studlab = study,
+                   data = adiponectinMETA,
+                   sm = "SMD",
+                   method.smd = "Hedges",
+                   fixed = FALSE,
+                   random = TRUE,
+                   method.tau = "REML",
+                   hakn = TRUE,
+                   prediction = FALSE,
+                   title = "adiponectin pooled results")
+
+summary(m.contadiponectin)
+```
+
+
+```{r}
+png(file = "forestplotadiponectin.png", width = 5000, height = 2500, res = 300)
+
+forestplotadiponectin <- forest.meta(m.contadiponectin,
+            sortvar = TE,
+            prediction = FALSE, 
+            print.tau2 = FALSE,
+            comb.random = FALSE,
+            comb.fixed = TRUE,
+            col.square = "lightblue",
+            col.diamond = "blue",
+            col.predict = "blue",
+            label.right = "Favor NBW",
+            label.left = "Favor LBW",
+            xlim = c(-6,5),
+           leftcols = c("study", "mean_adiponectin_intervention", "sd_adiponectin_intervention", "n_intervention", "mean_adiponectin_control", "sd_adiponectin_control", "n_control", "seTE", "blood_sample_type"),
+           leftlabs = c("Study and \npublication year", "Mean adp \n for LBW", "SD adp \n for LBW", "n\n for LBW", "Mean adp \n for NBW", "SD adp \n NBW", "n\n Control",  "Standard\n Error", "Blood sample\n type"))
+
+dev.off()
+```
+
+
+```{r}
+#Find the reason for high I2
+find.outliers(m.contadiponectin)
+```
+
+
+```{r}
+m.cont.inf <- InfluenceAnalysis(m.contadiponectin, random = TRUE)
+plot(m.cont.inf, "baujat")
+plot(m.cont.inf, "influence")
+
+```
+
+
+```{r}
+plot(m.cont.inf, "es")
+plot(m.cont.inf, "i2")
+```
+
+
+```{r}
+#GOSH plot to explore robustness of our meta-analysis
+m.rma <- rma(yi = m.contadiponectin$TE,
+             sei = m.contadiponectin$seTE,
+             method = m.contadiponectin$method.tau,
+             test = "knha")
+
+res.gosh <- gosh(m.rma)
+plot(res.gosh, alpha = 0.01)
+```
+
+
+```{r}
+res.gosh.diag <- gosh.diagnostics(res.gosh, 
+                                  km.params = list(centers = 2),
+                                  db.params = list(eps = 0.08, 
+                                                   MinPts = 50))
+res.gosh.diag
+```
+
+
+```{r}
+update.meta(m.contadiponectin, exclude = c(4, 5, 8, 9, 11, 17, 23, 24, 26)) %>% 
+  summary()
+```
+
+
+
+
+```{r}
+#Subgroup analysis
+update.meta(m.contadiponectin, 
+            subgroup = age_category, 
+            tau.common = FALSE)
+```
+
+
+```{r}
+update.meta(m.contadiponectin, 
+            subgroup = blood_sample_type, 
+            tau.common = FALSE)
+```
+
+```{r}
+update.meta(m.contadiponectin, subgroup = blood_sample_type, tau.common = TRUE)
+```
+
+```{r}
+update.meta(m.contadiponectin,
+            subgroup = risk_of_bias, 
+            tau.common = FALSE)
+```
+
+```{r}
+update.meta(m.contadiponectin, subgroup = risk_of_bias, tau.common = TRUE)
+```
+```{r}
+update.meta(m.contadiponectin,
+            subgroup = molecular_form, 
+            tau.common = TRUE)
+```
+
+
+```{r}
+
+#Conducting multiple meta-regression
+
+library(metafor)
+library(tidyverse)
+library(dmetar)
+library(PerformanceAnalytics)
+```
+
+
+
+```{r}
+adiponectinRegressiondata <-  merge(x = adiponectinMETA_calc, y = adiponectinSRdata, by = "study", all.x = TRUE)
+
+adiponectinRegressiondata <- adiponectinRegressiondata %>%
+  rename(
+    yi = es,
+    sei = se,
+  )
+```
+
+```{r}
+head(adiponectinRegressiondata$blood_sample_type)
+```
+
+
+
+```{r}
+metareg(m.contadiponectin, birth_weight_mean_diff)
+```
+
+```{r}
+metareg(m.contadiponectin, blood_sample_type)
+```
+
+```{r}
+metareg(m.contadiponectin, molecular_form)
+```
+
+
+Metareg with RoB
+```{r}
+# Assuming your meta-analysis dataset is named adiponectinRegressiondata
+adiponectinRegressiondata <- within(adiponectinRegressiondata, {
+high_bias <- as.character("risk_of_bias" == "High")
+low_bias <- as.character("risk_of_bias" == "Low")
+unclear_bias <- as.character("risk_of_bias" == "Unclear")
+})
+
+
+```
+
+
+```{r}
+#adiponectinRegressiondata [c("mean_birth_weight_difference", "publication_year", "age_category")] %>% chart.Correlation()
+
+```
+
+
+```{r}
+#Meta-regression with publication year as a predictor
+m.pubyear <- rma(yi = yi,
+              sei = sei,
+              data = adiponectinRegressiondata,
+              method = "ML",
+              mods = ~ publication_year,
+              test = "knha")
+#resultatet gemmes som 
+m.pubyear
+```
+
+
+```{r}
+#Meta-regression  with assay type as a predictor
+m.bloodsample <- rma(yi = yi, 
+                  sei = sei, 
+                  data = adiponectinRegressiondata, 
+                  method = "ML", 
+                  mods = ~ blood_sample_type,
+                  test = "knha")
+m.bloodsample #resultatet gemmes som
+```
+
+
+```{r}
+#Metaregression  with age category as a predictor
+m.agecategory <- rma(yi = yi, 
+                  sei = sei, 
+                  data = adiponectinRegressiondata, 
+                  method = "ML", 
+                  mods = ~ age_category,
+                  test = "knha")
+m.agecategory #resultatet gemmes som
+```
+
+```{r}
+#Metaregression with risk of bias as predictor
+m.riskofbias <- rma(yi = yi, 
+                  sei = sei, 
+                  data = adiponectinRegressiondata, 
+                  method = "ML", 
+                  mods = ~ risk_of_bias,
+                  test = "knha")
+m.riskofbias #resultatet gemmes som
+```
+
+
+
+```{r}
+#Multi-Model inference
+multimodel.inference(TE = "yi", 
+                     seTE = "sei",
+                     data = adiponectinRegressiondata,
+                     predictors = c("blood_sample_type", "age_category", "publication_year", "risk_of_bias"),
+                     interaction = FALSE)
+
+```
+
+
+META REGRESSION adiponectin (chapter 8)
+```{r}
+
+# we want to examine if the birth weight mean diff of a study can be used to predict its effect size
+adiponectinmetaregweightdiff <- metareg(m.contadiponectin, birth_weight_mean_diff)
+
+#This creates a bubble plot, which shows the estimated regression slope, as well as the effect size of each study. To indicate the weight of a study, the bubbles have different sizes, with a greater size representing a higher weight.
+
+png(file = "bubbleplot06122023.png", width = 2700, height = 2400, res = 300)
+
+bubble(adiponectinmetaregweightdiff, studlab = TRUE, pos.studlab = 1, col = 'red', bg = 'pink', xlim = c(500,2100), cex.studlab = 0
+)
+
+
+```
+
+
+
+
+Linear reg med adiponectin level and weight intervention
+```{r}
+
+# Fit linear regression model
+model <- lm(adiponectinRegressiondata$mean_adiponectin_intervention ~ adiponectinRegressiondata$mean_birth_weight_intervention)
+
+summary(model)
+
+# Create a scatter plot
+plot(adiponectinRegressiondata$mean_birth_weight_intervention, adiponectinRegressiondata$mean_adiponectin_intervention, main = "Scatter plot with Regression Line", xlab = "Birthweight in LBW subjects", ylab = "Mean adiponectin level in ug/mL")
+
+# Add regression line
+abline(model, col = "red")
+```
+
+
+
+```{r}
+#data <- data.frame(
+  #x  # Independent variable = Birthweight intervention
+  #mean_y  # Mean (Dependent variable) = Mean adiponectin level
+  #sd_y   # Standard deviation = Standard deviation adiponectin level
+
+
+# Calculate weights as inverse of variance
+adiponectinRegressiondata$weights = 1 / (adiponectinRegressiondata$sd_adiponectin_intervention^2)
+
+# Perform weighted linear regression
+model <- lm(mean_adiponectin_intervention ~ mean_birth_weight_intervention, data = adiponectinRegressiondata, weight = weights)
+
+# Summarize the model
+summary(model)
+
+# Plot
+plot(adiponectinRegressiondata$mean_birth_weight_intervention, adiponectinRegressiondata$mean_adiponectin_intervention, main = "Weighted Linear Regression",
+     xlab = "Mean birthweight for the LBW studies", ylab = "Mean adiponectin levels in the LBW group",
+     pch = 19)
+abline(model, col = "red")
+```
+
+
+
+
+```{r}
+
+adiponectin_LBW_vs_NBW <- read_excel("C:/Users/AALH0054/Desktop/R codes/LBW vs NBW.xlsx")
+
+adiponectin_LBW_vs_NBW$mean_birth_weight <- as.numeric(adiponectin_LBW_vs_NBW$mean_birth_weight)
+adiponectin_LBW_vs_NBW$mean_adiponectin <- as.numeric(adiponectin_LBW_vs_NBW$mean_adiponectin)
+
+install.packages("ggpubr")
+library(ggpubr)
+install.packages("ggpubr", dependencies = TRUE)
+library(ggrepel)
+
+
+
+# Boxplot stratified by NBW and LBW
+LBW_vs_NBWplot <- ggplot(adiponectin_LBW_vs_NBW, aes(x=LBW_NBW, y=mean_adiponectin)) +
+  geom_boxplot() +
+  ylim(-100, 100) +
+  theme_minimal()+ 
+  labs(title = "Mean adiponectin levels in LBW vs NBW", x = "LBW vs NBW adoponectin levels", y = "Adiponectin levels in ug/mL") 
+ stat_compare_means(aes(group = LBW_NBW), 
+                     label = "p.format", 
+                     p.adjust.method = "none",  # No adjustment for p-values
+                     digits = 2)   # Set number of digits for p-values 
+LBW_vs_NBWplot
+```
+
+```{r}
+# Calculate the interquartile range (IQR)
+Q1 <- quantile(adiponectin_LBW_vs_NBW$mean_adiponectin, 0.25)
+Q3 <- quantile(adiponectin_LBW_vs_NBW$mean_adiponectin, 0.75)
+IQR <- Q3 - Q1
+
+# Define the upper and lower bounds for outliers
+upper_bound <- Q3 + 1.5 * IQR
+lower_bound <- Q1 - 1.5 * IQR
+
+# Identify outliers
+outliers <- adiponectin_LBW_vs_NBW$mean_adiponectin > upper_bound | adiponectin_LBW_vs_NBW$mean_adiponectin < lower_bound
+
+# Label outliers in the original data frame
+adiponectin_LBW_vs_NBW$outlier <- ifelse(outliers, "Outlier", "Not Outlier")
+
+# Create the boxplot
+LBW_vs_NBWplot <- ggplot(adiponectin_LBW_vs_NBW, aes(x = LBW_NBW, y = mean_adiponectin)) +
+  geom_boxplot() +
+  ylim(-40, 90) +
+  theme_minimal() +
+  labs(title = "Mean adiponectin levels in LBW vs NBW", x = "LBW vs NBW adoponectin levels", y = "Adiponectin levels in ug/mL") +
+  stat_compare_means(aes(group = LBW_NBW), 
+                     label = "p.format", 
+                     p.adjust.method = "none",  # No adjustment for p-values
+                     digits = 2)   # Set number of digits for p-values 
+
+# Adding labels for outliers
+LBW_vs_NBWplot +
+  geom_text_repel(data = subset(adiponectin_LBW_vs_NBW, outlier == "Outlier"),
+                  aes(label = study),
+                  box.padding = unit(0.35, "lines"),
+                  point.padding = unit(0.5, "lines"),
+                  segment.color = "grey50")
+
+
+```
+
+
+
+
+```{r}
+
+# Define summary statistics
+mean_x <- c(adiponectin_LBW_vs_NBW$mean_birth_weight)  # Mean of X
+sd_x <- c(adiponectin_LBW_vs_NBW$sd_birth_weight)    # Standard deviation of X
+n_x <- c(adiponectin_LBW_vs_NBW$n)     # Sample size of X
+
+mean_y <- c(adiponectin_LBW_vs_NBW$mean_adiponectin)  # Mean of Y
+sd_y <- c(adiponectin_LBW_vs_NBW$sd_adiponectin)    # Standard deviation of Y
+n_y <- c(adiponectin_LBW_vs_NBW$n)     # Sample size of Y
+
+# Generate individual-level data
+set.seed(123)  # for reproducibility
+
+# Define values for n_x, mean_x, and sd_x
+n_x <- 100  # replace with your desired value
+mean_x <- 0  # replace with your desired value
+sd_x <- 1    # replace with your desired value
+
+# Define values for n_y, mean_y, and sd_y
+n_y <- 100  # replace with your desired value
+mean_y <- 0  # replace with your desired value
+sd_y <- 1    # replace with your desired value
+
+x <- unlist(mapply(rnorm, n_x, mean_x, sd_x))
+y <- unlist(mapply(rnorm, n_y, mean_y, sd_y))
+
+# Perform Pearson Correlation
+correlation <- cor(x, y, method = "pearson")
+
+# Print the result
+print(correlation)
+
+
+
+
+```
+
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(gridExtra)
+
+# Your data frame
+df <- data.frame(
+  x = c(1, 2, 3, 4, 5),
+  y = c(2, 3, 5, 7, 11),
+  w = c(1, 1.5, 2, 2.5, 3) # Example weights
+)
+
+# Perform weighted linear regression
+weighted_model <- lm(y ~ x, data = df, weights = w)
+
+# Make a new data frame for the predicted values
+df_predict <- data.frame(x = df$x)
+df_predict$y_predict <- predict(weighted_model, newdata = df_predict)
+
+# Plot the points and the weighted regression line
+p1 <- ggplot(df, aes(x = x, y = y)) +
+  geom_point() + # Plot the actual points
+  geom_line(data = df_predict, aes(y = y_predict), color = "blue") + # Plot the regression line
+  ggtitle("Weighted Linear Regression")
+
+p2 <- ggplot(df, aes(x = x, y = y)) +
+  geom_point() + # Plot the actual points
+  geom_line(data = df_predict, aes(y = y_predict), color = "red") + # Plot the regression line
+  ggtitle("Weighted Linear Regression")
+
+grid.arrange(p1, p2, nrow = 2, ncol = 1)
+
+#Here's what this code does:
+
+#It creates a data frame df with your variables and weights.
+#It performs a weighted linear regression using lm() with the weights argument.
+#It generates a new data frame df_predict to hold the predicted values from the model.
+#It uses ggplot2 to plot the points and the predicted regression line.
+```
+
+
+```{r}
+#Eggers test and funnel plot
+install.packages("dmetar")
+library("dmetar")
+library("meta")
+
+
+# Produce funnel plot
+funnel.meta(m.contadiponectin,
+            xlim = c(-8, 2.5),
+            studlab = TRUE)
+
+# Add title
+title("Funnel Plot (Low birth weight individuals vs normal birth weight individuals)")
+
+# Perform Egger's test
+eggers.test(m.contadiponectin)
+
+
+```
+```{r}
+library("meta")
+metabias(m.contadiponectin, method.bias = "linreg")
+```
+
+
+
+```{r}
+#dataset for (adiponectin)
+# Use forward slash
+setwd("C:/Users/AALH0054/Desktop/R codes")
+
+
+pearson <- pearson_correlation <- read_excel("C:/Users/AALH0054/Desktop/R codes/pearson correlation.xlsx")
+
+library(metafor)
+```
+
+```{r}
+study_names <- c(pearson_correlation$study)
+correlation_coefficients <- c(pearson_correlation$pearson_correlation)
+sample_sizes <- c(pearson_correlation$n)
+
+#create a dataframe 
+meta_data <- data.frame(
+  study = study_names, 
+  correlation = correlation_coefficients,
+  sample_size = sample_sizes
+)
+
+```
+
+```{r}
+class(meta_data$correlation)
+meta_data$correlation <- as.numeric(meta_data$correlation)
+```
+
+
+```{r}
+#Fischer's z transformation 
+
+meta_data$fisher_z <- atanh(meta_data$correlation)
+```
+
+```{r}
+#perform meta analysis 
+
+result <- rma.uni(yi = fisher_z, vi = 1 / (sample_sizes -3), data = meta_data)
+
+
+summary(result)
+
+```
+
+```{r}
+# Create a forest plot with custom options
+forest(
+  result,
+  showweights = TRUE,
+  slab = meta_data$study,  # Display study names on the y-axis
+  cex = 0.5,  # Adjust the size of text
+  xlim = c(-5, 5),  # Set the x-axis limits
+  refline = 0,  # Add a reference line at 0 (null effect)
+  col = "steelblue",  # Set color for the points
+  order = order(meta_data$study),  # Order studies by name
+  main = "Forest Plot of Correlation Coefficients",  # Add a main title
+  xlab = "Correlation Coefficient (Fisher's Z)",  # Label for x-axis
+  alim = c(-2, 2),  # Set limits for axis labels
+  mlab = "Overall Estimate",  # Label for the overall estimate
+  at = c(-2, -1, 0, 1, 2),  # Set tick marks on the x-axis
+  digits = 2  # Set the number of digits for the estimates
+  
+  
+)
+
+
+```
+
+
+```{r}
+#example of back transforming 
+
+pooled_z <- 3.3138
+pooled_correlation <- tanh(pooled_z)
+print(pooled_correlation)
+```
+```{r}
+# Load necessary libraries
+library(readxl)
+library(metafor)
+
+# Set working directory
+setwd("C:/Users/AALH0054/Desktop/R codes")
+
+# Read in the data from the Excel file
+pearson <- read_excel("pearson correlation.xlsx")
+
+# Extract the study names, correlation coefficients, and sample sizes
+study_names <- pearson$study
+correlation_coefficients <- pearson$pearson_correlation
+sample_sizes <- pearson$n
+
+# Create a dataframe with the extracted data
+meta_data <- data.frame(
+  study = study_names, 
+  correlation = correlation_coefficients,
+  sample_size = sample_sizes
+)
+
+# Ensure that the correlation coefficients are numeric
+meta_data$correlation <- as.numeric(meta_data$correlation)
+
+# Perform meta-analysis without Fisher's Z transformation
+# Use the correlation coefficients directly
+result <- rma(yi = correlation, vi = 1 / (sample_sizes - 3), data = meta_data, method = "REML")
+
+# Print the summary of the meta-analysis
+summary(result)
+
+```
+```{r}
+# Create a forest plot with custom options
+forest(
+  result,
+  showweights = TRUE,
+  slab = meta_data$study,  # Display study names on the y-axis
+  cex = 0.5,  # Adjust the size of text
+  xlim = c(-5, 5),  # Set the x-axis limits
+  refline = 0,  # Add a reference line at 0 (null effect)
+  col = "steelblue",  # Set color for the points
+  order = order(meta_data$study),  # Order studies by name
+  main = "Forest Plot of Correlation Coefficients",  # Add a main title
+  xlab = "Correlation Coefficient (Fisher's Z)",  # Label for x-axis
+  alim = c(-2, 2),  # Set limits for axis labels
+  mlab = "Overall Estimate",  # Label for the overall estimate
+  at = c(-2, -1, 0, 1, 2),  # Set tick marks on the x-axis
+  digits = 2  # Set the number of digits for the estimates
+)
+```
+
+
